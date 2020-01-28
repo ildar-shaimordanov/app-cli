@@ -51,12 +51,10 @@ C<basename $0>, but can be overridden from within your application.
     sub prog_name {
         my $self = shift;
 
-        $default = basename $0 unless $default;
+        $default ||= basename $0;
         return $default unless ref $self;
 
-        return $self->{prog_name} if defined $self->{prog_name};
-
-        $self->{prog_name} = basename $0;
+        $self->{prog_name} //= $default;
         return $self->{prog_name};
     }
 }
