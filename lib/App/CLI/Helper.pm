@@ -13,37 +13,57 @@ sub import {
     }
 }
 
-=head3 mloc([$mode])
+=head3 module_info([$name])
 
-Return the module location depending on the C<$mode> as follows:
+Return the module details:
 
 =over 4
 
-=item C<+1> stands for the file name (converts C<Class::Name> to C<Class/Name.pm>)
+=item B<class>
 
-=item C<0> or I<nothing> stands for the file location (assumes C<$INC{"Class/Name.pm"}>)
+The class of the object as C<Class::Name>.
 
-=item C<-1> stands for the upper directory name as C<dirname $INC{"Class/Name.pm"}>
+=item B<filename>
 
-=item C<-2> stands for the directory name supposed to be the upper directory for underlying modules
+The module filename (converted as C<Class::Name> to C<Class/Name.pm>.
+
+=item B<location>
+
+The file location as C<$INC{"Class/Name.pm"}>.
+
+=item B<dirname>
+
+the directory where the module lies (the same as C<dirname $INC{"Class/Name.pm"}>).
+
+=item B<moduledir>
+
+Assume the module has submodules and return the directory name next to the file location (the same as C<$INC{"Class/Name.pm"} =~ s{\.pm$}{}>).
 
 =back
 
 =cut
 
-sub mloc {
-	my ( $self, $mode ) = @_;
+sub module_info {
+	my ( $self, $name ) = @_;
 	$self = ref $self || $self;
+
+	my %spec = ();
+
+	$spec{class} = $self;
 
 	$self =~ s{::}{/}g;
 	$self .= ".pm";
-	return $self if $mode > 0;
+	$spec{filename} = $self;
 
 	$self = $INC{$self};
-	return $self unless $mode;
+	$spec{location} = $self;
 
-	$self and ( $self ) =~ $mode < -1 ? qr{\.pm$} : qr{/[^/]+$};
-	return $self;
+	( $spec{moduledir} = $self ) =~ s{\.pm$}{};
+	( $spec{dirname}   = $self ) =~ s{/[^/]+$}{};
+
+	return ( $name && grep { $name eq $_ } keys %spec )
+		? $spec{$name}
+		: %spec;
 }
 
 =head3 commands()
@@ -55,7 +75,7 @@ List the application commands.
 sub commands {
     my ( $class, $include_alias ) = @_;
 
-    my $dir = $class->mloc(-2);
+    my $dir = $class->module_info("moduledir");
 
     my @cmds = map { ($_) = m{^\Q$dir\E/(.*)\.pm}; lc($_) } $class->files;
 
@@ -98,7 +118,7 @@ Return module files of subcommands of first level
 sub files {
     my $class = shift;
 
-    my $dir = $class->mloc(-2);
+    my $dir = $class->module_info("moduledir");
 
     my @sorted_files = sort glob("$dir/*.pm");
 
