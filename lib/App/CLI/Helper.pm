@@ -13,6 +13,39 @@ sub import {
     }
 }
 
+=head3 mloc([$mode])
+
+Return the module location depending on the C<$mode> as follows:
+
+=over 4
+
+=item C<+1> stands for the file name (converts C<Class::Name> to C<Class/Name.pm>)
+
+=item C<0> or I<nothing> stands for the file location (assumes C<$INC{"Class/Name.pm"}>)
+
+=item C<-1> stands for the upper directory name as C<dirname $INC{"Class/Name.pm"}>
+
+=item C<-2> stands for the directory name supposed to be the upper directory for underlying modules
+
+=back
+
+=cut
+
+sub mloc {
+	my ( $self, $mode ) = @_;
+	$self = ref $self || $self;
+
+	$self =~ s{::}{/}g;
+	$self .= ".pm";
+	return $self if $mode > 0;
+
+	$self = $INC{$self};
+	return $self unless $mode;
+
+	$self and ( $self ) =~ $mode < -1 ? qr{\.pm$} : qr{/[^/]+$};
+	return $self;
+}
+
 =head3 commands()
 
 List the application commands.
@@ -21,11 +54,8 @@ List the application commands.
 
 sub commands {
     my ( $class, $include_alias ) = @_;
-    my $dir = ref($class) || $class;
 
-    $dir =~ s{::}{/}g;
-    $dir = $INC{ $dir . '.pm' };
-    $dir =~ s/\.pm$//;
+    my $dir = $class->mloc(-2);
 
     my @cmds = map { ($_) = m{^\Q$dir\E/(.*)\.pm}; lc($_) } $class->files;
 
@@ -67,10 +97,9 @@ Return module files of subcommands of first level
 
 sub files {
     my $class = shift;
-    $class = ref($class) if ref($class);
-    $class =~ s{::}{/}g;
-    my $dir = $INC{ $class . '.pm' };
-    $dir =~ s/\.pm$//;
+
+    my $dir = $class->mloc(-2);
+
     my @sorted_files = sort glob("$dir/*.pm");
 
     return @sorted_files;
