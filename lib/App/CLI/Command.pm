@@ -177,7 +177,7 @@ section is displayed as well.
 sub usage {
     my ( $self, $want_detail ) = @_;
     my $fname = $self->filename;
-    my ($cmd) = $fname =~ m{\W(\w+)\.pm$};
+    ( my $cmd = ref $self ) =~ s{.*\W}{};
     require Pod::Simple::Text;
     my $parser = Pod::Simple::Text->new;
     my $buf;
@@ -185,7 +185,17 @@ sub usage {
     $parser->parse_file($fname);
 
     my $base = ref $self->app;
-    $buf =~ s/\Q$base\E::(\w+)/\l$1/g;
+
+    # Assuming the current POD is something beginning with the NAME and
+    # the following class name and ending before the next NAME:
+
+    # 1. Remove everything before the current POD
+    $buf =~ s/.*(?=^NAME\s+\Q$base\E::\Q$cmd\E)//sm;
+
+    # 2. Remove everything after the current POD
+    ( $buf ) = split m/^NAME(?![\s\S]+?\Q$base\E::\Q$cmd\E)/sm, $buf;
+
+    $buf =~ s/\Q$base\E::(\Q$cmd\E)/\l$1/g;
     $buf =~ s/^AUTHORS.*//sm;
     $buf =~ s/^DESCRIPTION.*//sm unless $want_detail;
     print $self->loc_text($buf);
