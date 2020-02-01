@@ -8,7 +8,7 @@ use File::Basename qw( basename );
 sub import {
     no strict 'refs';
     my $caller = caller;
-    for (qw(commands files prog_name)) {
+    for (qw(commands files prog_name module_info)) {
         *{ $caller . "::$_" } = *$_;
     }
 }
