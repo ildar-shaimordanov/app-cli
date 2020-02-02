@@ -142,6 +142,34 @@ sub app {
     return $self->{app};
 }
 
+=head3 load_usage ($file, $encoding)
+
+Load usage for the current command object. Optionally, a file could be
+given to extract the usage from the POD. In addition, an encoding can be
+used to specify encoding of the input file.
+
+=cut
+
+sub load_usage {
+	my $self = shift;
+
+	my $file = shift // $self->filename;
+	my $encoding = shift // "";
+
+	open my $fh, "<$encoding", $file or die "$!\n";
+
+	require Pod::Simple::Text;
+	my $parser = Pod::Simple::Text->new;
+	my $buf;
+
+	$parser->output_string( \$buf );
+	$parser->parse_file($fh);
+
+	close $fh;
+
+	return $buf;
+}
+
 =head3 brief_usage ($file)
 
 Display a one-line brief usage of the command object.  Optionally, a file
@@ -151,12 +179,13 @@ could be given to extract the usage from the POD.
 
 sub brief_usage {
     my ( $self, $file ) = @_;
-    open my ($podfh), '<', ( $file || $self->filename ) or return;
-    local $/ = undef;
-    my $buf  = <$podfh>;
+
+    my $buf = $self->load_usage($file) or return;
+
     my $base = ref $self->app;
     my $indent = "    ";
-    if ( $buf =~ /^=head1\s+NAME\s*\Q$base\E::(\w+)( - .+)$/m ) {
+
+    if ( $buf =~ /^NAME\s+\Q$base\E::(\w+)( - .+)/m ) {
         print $indent, loc( lc($1) . $2 ), "\n";
     }
     else {
@@ -164,7 +193,6 @@ sub brief_usage {
         $cmd =~ s/^(?:.*)\/(.*?).pm$/$1/;
         print $indent, lc($cmd), " - ", loc("undocumented") . "\n";
     }
-    close $podfh;
 }
 
 =head3 usage ($want_detail)
@@ -176,15 +204,11 @@ section is displayed as well.
 
 sub usage {
     my ( $self, $want_detail ) = @_;
-    my $fname = $self->filename;
-    ( my $cmd = ref $self ) =~ s{.*\W}{};
-    require Pod::Simple::Text;
-    my $parser = Pod::Simple::Text->new;
-    my $buf;
-    $parser->output_string( \$buf );
-    $parser->parse_file($fname);
 
+    ( my $cmd = ref $self ) =~ s{.*\W}{};
     my $base = ref $self->app;
+
+    my $buf = $self->load_usage or return;
 
     # Assuming the current POD is something beginning with the NAME and
     # the following class name and ending before the next NAME:

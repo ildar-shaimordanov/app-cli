@@ -60,14 +60,9 @@ sub run {
             $cmd->usage(1);
         }
         elsif ( my $file = $self->_find_topic($topic) ) {
-            open my $fh, '<:encoding(UTF-8)', $file or die $!;
-            require Pod::Simple::Text;
-            my $parser = Pod::Simple::Text->new;
-            my $buf;
-            $parser->output_string( \$buf );
-            $parser->parse_file($fh);
+            my $buf = $self->load_usage($file, ':encoding(UTF-8)') or return;
 
-            $buf =~ s/^NAME\s+(.*?)::Help::\S+ - (.+)\s+DESCRIPTION/    $2:/;
+            $buf =~ s/\S+::Help::(\S+)/\l$1/;
             print $self->loc_text($buf);
         }
         else {
