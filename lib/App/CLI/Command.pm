@@ -56,8 +56,8 @@ sub run_command {
 }
 
 sub run {
-    my $class = shift;
-    Carp::croak ref($class) . " does not implement mandatory method 'run'\n";
+    my $self = shift;
+    Carp::croak ref($self) . " does not implement mandatory method 'run'\n";
 }
 
 =head3 subcommand()
@@ -110,7 +110,7 @@ constant subcommands, otherwise, return C<undef>.
 
 sub cascadable {
     my $self = shift;
-    my $class = ref $self || $self;
+    my $class = ref($self) || $self;
     for ( $self->subcommands ) {
         no strict 'refs';
         my $package_name = $class . '::' . $_;

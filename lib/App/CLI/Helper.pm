@@ -20,17 +20,17 @@ List the application commands.
 =cut
 
 sub commands {
-    my ( $class, $include_alias ) = @_;
-    my $dir = ref($class) || $class;
+    my ( $self, $include_alias ) = @_;
+    my $dir = ref($self) || $self;
 
     $dir =~ s{::}{/}g;
     $dir = $INC{ $dir . '.pm' };
     $dir =~ s/\.pm$//;
 
-    my @cmds = map { ($_) = m{^\Q$dir\E/(.*)\.pm}; lc($_) } $class->files;
+    my @cmds = map { ($_) = m{^\Q$dir\E/(.*)\.pm}; lc($_) } $self->files;
 
-    if ( $include_alias and ref $class and $class->can('alias') ) {
-        my %aliases = $class->alias;
+    if ( $include_alias and ref $self and $self->can('alias') ) {
+        my %aliases = $self->alias;
         push @cmds, $_ foreach keys %aliases;
     }
     my @sorted_cmds = sort @cmds;
@@ -68,10 +68,10 @@ Return module files of subcommands of first level
 =cut
 
 sub files {
-    my $class = shift;
-    $class = ref($class) if ref($class);
-    $class =~ s{::}{/}g;
-    my $dir = $INC{ $class . '.pm' };
+    my $self = shift;
+    $self = ref($self) || $self;
+    $self =~ s{::}{/}g;
+    my $dir = $INC{ $self . '.pm' };
     $dir =~ s/\.pm$//;
     my @sorted_files = sort glob("$dir/*.pm");
 
