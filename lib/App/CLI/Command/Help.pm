@@ -89,7 +89,7 @@ sub _find_topic {
 
     if ( !$inc ) {
         my $pkg = __PACKAGE__;
-        $pkg =~ s{::}{/};
+        $pkg =~ s{::}{/}g;
         $inc = substr( __FILE__, 0, -length("$pkg.pm") );
 
         my $base = $self->help_base;
