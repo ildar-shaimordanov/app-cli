@@ -142,32 +142,62 @@ sub app {
     return $self->{app};
 }
 
-=head3 load_usage ($file, $encoding)
+=head3 print_usage ($options)
 
-Load usage for the current command object. Optionally, a file could be
-given to extract the usage from the POD. In addition, an encoding can be
-used to specify encoding of the input file.
+Try to load and print or return the usage text depending on the supplied options.
+
+by default, it tries to load POD from the current C<.pm> file, parse it and print immediately.
+
+If the method is called in the scalar context, it returns the text parsed from the found POD.
+
+=over 4
+
+=item B<file> => I<FILE>
+
+Load the specified file instead the current object file.
+
+=item B<encoding> => I<ENCODING>
+
+Open with the specified encoding.
+
+=item B<brief> => I<1>
+
+Print the brief usage (the command name and short description only).
+
+=item B<want_detail> => I<1>
+
+Print the DESCRIPTION section as well (doesn't work, when B<brief> => I<1>).
+
+=item B<die_on_open_error> => I<1>
+
+Die immediately, on unable to open the file. Defaults to return.
+
+=back
 
 =cut
 
-sub load_usage {
-	my $self = shift;
+sub print_usage {
+	my ( $self, $opts ) = @_;
 
-	my $file = shift // $self->filename;
-	my $encoding = shift // "";
+	my $file = $opts->{file} // $self->filename;
+	my $encoding = $opts->{encoding} // "";
 
-	open my $fh, "<$encoding", $file or die "$!\n";
+	open my $fh, "<$encoding", $file or return;
 
 	require Pod::Simple::Text;
 	my $parser = Pod::Simple::Text->new;
-	my $buf;
+#	my $buf;
 
-	$parser->output_string( \$buf );
+	$parser->output_string( $_ = "" );
 	$parser->parse_file($fh);
 
 	close $fh;
 
-	return $buf;
+	$_ = $opts->{post_parse}->() if $opts->{post_parse};
+
+#	return $buf if defined wantarray;
+
+	print;
 }
 
 =head3 brief_usage ($file)
@@ -178,21 +208,21 @@ could be given to extract the usage from the POD.
 =cut
 
 sub brief_usage {
-    my ( $self, $file ) = @_;
+    my $self = shift;
+    my $file = shift;
+    $self->print_usage({ file => $file, post_parse => sub {
+		my $base = ref $self->app;
+		my $indent = "    ";
 
-    my $buf = $self->load_usage($file) or return;
-
-    my $base = ref $self->app;
-    my $indent = "    ";
-
-    if ( $buf =~ /^NAME\s+\Q$base\E::(\w+)( - .+)/m ) {
-        print $indent, loc( lc($1) . $2 ), "\n";
-    }
-    else {
-        my $cmd = $file || $self->filename;
-        $cmd =~ s/^(?:.*)\/(.*?).pm$/$1/;
-        print $indent, lc($cmd), " - ", loc("undocumented") . "\n";
-    }
+		if ( m/^NAME\s+\Q$base\E::(\w+)( - .+)/m ) {
+			return $indent . loc( lc($1) . $2 ) . "\n";
+		}
+		else {
+			my ( $cmd ) = $file =~ m/^(?:.*)\/(.*?).pm$/;
+			return $indent . lc($cmd) . " - " . loc("undocumented") . "\n";
+		}
+        },
+    });
 }
 
 =head3 usage ($want_detail)
@@ -203,26 +233,27 @@ section is displayed as well.
 =cut
 
 sub usage {
-    my ( $self, $want_detail ) = @_;
+    my $self = shift;
+    my $want_detail = shift;
+    $self->print_usage({ file => $self->filename, post_parse => sub {
+		( my $cmd = ref $self ) =~ s{.*\W}{};
+		my $base = ref $self->app;
 
-    ( my $cmd = ref $self ) =~ s{.*\W}{};
-    my $base = ref $self->app;
+		# Assuming the current POD is something beginning with the NAME and
+		# the following class name and ending before the next NAME:
 
-    my $buf = $self->load_usage or return;
+		# 1. Remove everything before the current POD
+		s/.*(?=^NAME\s+\Q$base\E::\Q$cmd\E)//sm;
 
-    # Assuming the current POD is something beginning with the NAME and
-    # the following class name and ending before the next NAME:
+		# 2. Remove everything after the current POD
+		( $_ ) = split m/^NAME(?![\s\S]+?\Q$base\E::\Q$cmd\E)/sm;
 
-    # 1. Remove everything before the current POD
-    $buf =~ s/.*(?=^NAME\s+\Q$base\E::\Q$cmd\E)//sm;
-
-    # 2. Remove everything after the current POD
-    ( $buf ) = split m/^NAME(?![\s\S]+?\Q$base\E::\Q$cmd\E)/sm, $buf;
-
-    $buf =~ s/\Q$base\E::(\Q$cmd\E)/\l$1/g;
-    $buf =~ s/^AUTHORS.*//sm;
-    $buf =~ s/^DESCRIPTION.*//sm unless $want_detail;
-    print $self->loc_text($buf);
+		s/\Q$base\E::(\Q$cmd\E)/\l$1/g;
+		s/^AUTHORS.*//sm;
+		s/^DESCRIPTION.*//sm unless $want_detail;
+		return $self->loc_text($_);
+        },
+    });
 }
 
 =head3 loc_text $text
@@ -233,6 +264,38 @@ localized version.
 =cut
 
 sub loc_text {
+    my $self = shift;
+    my $buf  = shift;
+
+    my @out;
+    my $out = "";
+    foreach my $line ( split( /\n\n+/, $buf, -1 ) ) {
+        if ( my @lines = $line =~ /^( {4}\s+.+\s*)$/mg ) {
+            my $out = "";
+            foreach my $chunk (@lines) {
+                $chunk =~ /^(\s*)(.+?)( *)(: .+?)?(\s*)$/ or next;
+                my $spaces = $3;
+                my $loc = $1 . loc( $2 . ( $4 || '' ) ) . $5;
+                $loc =~ s/: /$spaces: / if $spaces;
+                $out .= $loc . "\n";
+            }
+            push @out, $out;
+#            $out .= "\n";
+        }
+        elsif ( $line =~ /^(\s+)(\w+ - .*)$/ ) {
+            push @out, $1 . loc($2) . "\n";
+#            $out .= $1 . loc($2) . "\n\n";
+        }
+        elsif ( length $line ) {
+            push @out, loc($line) . "\n";
+#            $out .= loc($line) . "\n\n";
+        }
+    }
+    return join "\n", @out;
+    return $out;
+}
+
+sub loc_text1 {
     my $self = shift;
     my $buf  = shift;
 

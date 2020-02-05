@@ -60,10 +60,15 @@ sub run {
             $cmd->usage(1);
         }
         elsif ( my $file = $self->_find_topic($topic) ) {
-            my $buf = $self->load_usage($file, ':encoding(UTF-8)') or return;
+            die "$!\n" unless $self->print_usage({ file => $file, encoding => ':encoding(UTF-8)', post_parse => sub {
+                     s/\S+::Help::(\S+)/\l$1/;
+                     return $self->loc_text($_);
+                },
+            });
+#            my $buf = $self->print_usage({ file => $file, encoding => ':encoding(UTF-8)', die_on_open_error => 1 });
 
-            $buf =~ s/\S+::Help::(\S+)/\l$1/;
-            print $self->loc_text($buf);
+#            $buf =~ s/\S+::Help::(\S+)/\l$1/;
+#            print $self->loc_text($buf);
         }
         else {
             die loc( "Cannot find help topic '%1'.\n", $topic );
